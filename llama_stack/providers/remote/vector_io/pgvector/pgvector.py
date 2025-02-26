@@ -95,7 +95,9 @@ class PGVectorIndex(EmbeddingIndex):
         with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             execute_values(cur, query, values, template="(%s, %s, %s::vector)")
 
-    async def query(self, embedding: NDArray, k: int, score_threshold: float) -> QueryChunksResponse:
+    async def query(
+        self, embedding: NDArray, query_str: None, k: int, score_threshold: float, search_mode: None
+    ) -> QueryChunksResponse:
         with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute(
                 f"""

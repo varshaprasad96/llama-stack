@@ -56,7 +56,9 @@ class ChromaIndex(EmbeddingIndex):
             )
         )
 
-    async def query(self, embedding: NDArray, k: int, score_threshold: float) -> QueryChunksResponse:
+    async def query(
+        self, embedding: NDArray, query_str: None, k: int, score_threshold: float, search_mode: None
+    ) -> QueryChunksResponse:
         results = await maybe_await(
             self.collection.query(
                 query_embeddings=[embedding.tolist()],
