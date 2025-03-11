@@ -1,16 +1,22 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the terms described in the LICENSE file in
+# the root directory of this source tree.
+
+import argparse
 import asyncio
 import sqlite3
-import inspect
+
 import numpy as np
 import sqlite_vec
+
 from llama_stack.apis.vector_io import Chunk
 from llama_stack.providers.inline.vector_io.sqlite_vec.sqlite_vec import SQLiteVecIndex
-
 
 EMBEDDING_DIMENSION = 384
 DB_PATH = ":memory:"
 VECTOR_DB_ID = "vector_db"
-
 
 conn = sqlite3.connect(DB_PATH)
 conn.enable_load_extension(True)
@@ -21,14 +27,10 @@ async def setup_index():
     index = await SQLiteVecIndex.create(dimension=EMBEDDING_DIMENSION, connection=conn, bank_id=VECTOR_DB_ID)
     return index
 
+
 sqlite_vec_index = asyncio.run(setup_index())
 
-query_params = inspect.signature(sqlite_vec_index.query).parameters
-print("\n🔍 **Query API Supports the Following Parameters:**")
-for param_name, param_details in query_params.items():
-    print(f"  - {param_name} (Type: {param_details.annotation})")
-
-# ✅ Step 3: Insert sample text chunks + embeddings
+# Insert sample text chunks + embeddings
 sample_chunks = [
     Chunk(content="Machine learning is transforming AI research.", metadata={"document_id": "doc-1"}),
     Chunk(content="Deep learning is a subset of machine learning.", metadata={"document_id": "doc-2"}),
@@ -37,37 +39,41 @@ sample_chunks = [
     Chunk(content="Neural networks are the backbone of deep learning.", metadata={"document_id": "doc-5"}),
 ]
 
-# Generate random embeddings (replace with real embeddings in production)
 np.random.seed(42)
 sample_embeddings = np.array([np.random.rand(EMBEDDING_DIMENSION).astype(np.float32) for _ in sample_chunks])
 
-# ✅ Insert the chunks into the vector DB
 asyncio.run(sqlite_vec_index.add_chunks(sample_chunks, sample_embeddings))
 
-# ✅ Function to perform Keyword-Based Search
+
 async def keyword_search(query_str, top_k=3):
     print(f"\n🔍 Keyword Search for: '{query_str}'")
     response = await sqlite_vec_index.query(
         embedding=None, query_str=query_str, k=top_k, score_threshold=0.0, search_mode="keyword"
     )
-    for chunk, score in zip(response.chunks, response.scores):
+    for chunk, score in zip(response.chunks, response.scores, strict=False):
         print(f"📄 {chunk.metadata['document_id']}: {chunk.content} (Score: {score})")
 
-# ✅ Function to perform Vector-Based Search
+
 async def vector_search(query_embedding, top_k=3):
     print("\n🔍 Vector Search Results:")
     response = await sqlite_vec_index.query(
         embedding=query_embedding, query_str="", k=top_k, score_threshold=0.0, search_mode="vector"
     )
-    for chunk, score in zip(response.chunks, response.scores):
+    for chunk, score in zip(response.chunks, response.scores, strict=False):
         print(f"📄 {chunk.metadata['document_id']}: {chunk.content} (Score: {score:.4f})")
 
-# ✅ Run Keyword Search
-asyncio.run(keyword_search("deep learning"))
 
-# ✅ Run Vector Search (Using a random vector as a query)
-query_embedding = np.random.rand(EMBEDDING_DIMENSION).astype(np.float32)  # Replace with real embedding
-asyncio.run(vector_search(query_embedding))
+def main():
+    parser = argparse.ArgumentParser(description="Vector and Keyword Search with SQLiteVec")
+    parser.add_argument("--prompt", type=str, required=True, help="Query string for keyword search")
+    args = parser.parse_args()
 
-# Close connection
-conn.close()
+    asyncio.run(keyword_search(args.prompt))
+
+    query_embedding = np.random.rand(EMBEDDING_DIMENSION).astype(np.float32)  # Replace with real embedding
+    asyncio.run(vector_search(query_embedding))
+
+
+if __name__ == "__main__":
+    main()
+    conn.close()
