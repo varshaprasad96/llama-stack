@@ -68,6 +68,7 @@ class RAGQueryConfig(BaseModel):
     query_generator_config: RAGQueryGeneratorConfig = Field(default=DefaultRAGQueryGeneratorConfig())
     max_tokens_in_context: int = 4096
     max_chunks: int = 5
+    search_mode: str = "vector"
 
 
 @runtime_checkable

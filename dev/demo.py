@@ -51,7 +51,7 @@ async def keyword_search(query_str, top_k=3):
         embedding=None, query_str=query_str, k=top_k, score_threshold=0.0, search_mode="keyword"
     )
     for chunk, score in zip(response.chunks, response.scores, strict=False):
-        print(f"📄 {chunk.metadata['document_id']}: {chunk.content} (Score: {score})")
+        print(f"📄 {chunk.metadata['document_id']}: {chunk.content}")
 
 
 async def vector_search(query_embedding, top_k=3):
@@ -60,16 +60,14 @@ async def vector_search(query_embedding, top_k=3):
         embedding=query_embedding, query_str="", k=top_k, score_threshold=0.0, search_mode="vector"
     )
     for chunk, score in zip(response.chunks, response.scores, strict=False):
-        print(f"📄 {chunk.metadata['document_id']}: {chunk.content} (Score: {score:.4f})")
+        print(f"📄 {chunk.metadata['document_id']}: {chunk.content}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Vector and Keyword Search with SQLiteVec")
     parser.add_argument("--prompt", type=str, required=True, help="Query string for keyword search")
     args = parser.parse_args()
-
     asyncio.run(keyword_search(args.prompt))
-
     query_embedding = np.random.rand(EMBEDDING_DIMENSION).astype(np.float32)  # Replace with real embedding
     asyncio.run(vector_search(query_embedding))
 

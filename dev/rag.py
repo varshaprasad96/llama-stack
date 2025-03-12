@@ -7,11 +7,9 @@
 import os
 import uuid
 
-from llama_stack_client.lib.agents.agent import Agent
-from llama_stack_client.lib.agents.event_logger import EventLogger
 from llama_stack_client.types import Document
-from llama_stack_client.types.agent_create_params import AgentConfig
-from termcolor import cprint
+
+from llama_stack.apis.tools import RAGQueryConfig
 
 
 def create_http_client():
@@ -42,7 +40,7 @@ documents = [
     for i, url in enumerate(urls)
 ]
 
-# Register a vector database
+# Register a database
 vector_db_id = f"test-vector-db-{uuid.uuid4().hex}"
 client.vector_dbs.register(
     vector_db_id=vector_db_id,
@@ -57,35 +55,18 @@ client.tool_runtime.rag_tool.insert(
     chunk_size_in_tokens=512,
 )
 
-agent_config = AgentConfig(
-    model=os.environ["INFERENCE_MODEL"],
-    # Define instructions for the agent ( aka system prompt)
-    instructions="You are a helpful assistant",
-    enable_session_persistence=False,
-    # Define tools available to the agent
-    toolgroups=[
-        {
-            "name": "builtin::rag",
-            "args": {
-                "vector_db_ids": [vector_db_id],
-            },
-        }
-    ],
+print("************************** VECTOR ***************************************************")
+
+query_config = RAGQueryConfig(max_chunks=6, search_mode="vector").model_dump()
+results = client.tool_runtime.rag_tool.query(
+    vector_db_ids=[vector_db_id], content="what is torchtune", query_config=query_config
 )
+print(results.to_json())
 
-rag_agent = Agent(client, agent_config)
-session_id = rag_agent.create_session("test-session")
+print("************************** KEYWORD ***************************************************")
 
-user_prompts = [
-    "What are the top 5 topics that were explained? Only list succinct bullet points.",
-]
-
-# Run the agent loop by calling the `create_turn` method
-for prompt in user_prompts:
-    cprint(f"User> {prompt}", "green")
-    response = rag_agent.create_turn(
-        messages=[{"role": "user", "content": prompt}],
-        session_id=session_id,
-    )
-    for log in EventLogger().log(response):
-        log.print()
+query_config = RAGQueryConfig(max_chunks=6, search_mode="keyword").model_dump()
+results = client.tool_runtime.rag_tool.query(
+    vector_db_ids=[vector_db_id], content="what is torchtune", query_config=query_config
+)
+print(results.to_json())
