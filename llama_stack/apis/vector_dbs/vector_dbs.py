@@ -19,6 +19,7 @@ class VectorDB(Resource):
 
     embedding_model: str
     embedding_dimension: int
+    search_mode: str
 
     @property
     def vector_db_id(self) -> str:
@@ -57,6 +58,7 @@ class VectorDBs(Protocol):
         self,
         vector_db_id: str,
         embedding_model: str,
+        search_mode: str,
         embedding_dimension: Optional[int] = 384,
         provider_id: Optional[str] = None,
         provider_vector_db_id: Optional[str] = None,

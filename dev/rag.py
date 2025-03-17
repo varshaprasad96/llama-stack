@@ -46,6 +46,7 @@ client.vector_dbs.register(
     vector_db_id=vector_db_id,
     embedding_model="all-MiniLM-L6-v2",
     embedding_dimension=384,
+    extra_query={"search_mode": "keyword"},
 )
 
 # Insert the documents into the vector database

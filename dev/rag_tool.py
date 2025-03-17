@@ -4,13 +4,12 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+from uuid import uuid4
+
 import fire
 from llama_stack_client import LlamaStackClient
-from llama_stack_client.lib.agents.agent import Agent
-from llama_stack_client.lib.agents.event_logger import EventLogger
 from llama_stack_client.types import Document
 from termcolor import colored
-from uuid import uuid4
 
 
 def run_main(host: str, port: int, disable_safety: bool = False):
@@ -34,9 +33,7 @@ def run_main(host: str, port: int, disable_safety: bool = False):
 
     client = LlamaStackClient(base_url="http://localhost:8321")
 
-    vector_providers = [
-        provider for provider in client.providers.list() if provider.api == "vector_io"
-    ]
+    vector_providers = [provider for provider in client.providers.list() if provider.api == "vector_io"]
     if not vector_providers:
         print(colored("No available vector_io providers. Exiting.", "red"))
         return
@@ -65,6 +62,7 @@ def run_main(host: str, port: int, disable_safety: bool = False):
         vector_db_id=vector_db_id,
         chunk_size_in_tokens=512,
     )
+
 
 def main(host: str, port: int):
     run_main(host, port)

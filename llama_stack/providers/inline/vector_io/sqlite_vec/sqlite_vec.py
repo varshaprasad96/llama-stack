@@ -37,17 +37,18 @@ class SQLiteVecIndex(EmbeddingIndex):
       - An FTS5 table (fts_chunks_{bank_id}) for full-text keyword search.
     """
 
-    def __init__(self, dimension: int, connection: sqlite3.Connection, bank_id: str):
+    def __init__(self, dimension: int, connection: sqlite3.Connection, bank_id: str, search_mode: str):
         self.dimension = dimension
         self.connection = connection
         self.bank_id = bank_id
+        self.search_mode = search_mode
         self.metadata_table = f"chunks_{bank_id}".replace("-", "_")
         self.vector_table = f"vec_chunks_{bank_id}".replace("-", "_")
         self.fts_table = f"fts_chunks_{bank_id}".replace("-", "_")
 
     @classmethod
-    async def create(cls, dimension: int, connection: sqlite3.Connection, bank_id: str):
-        instance = cls(dimension, connection, bank_id)
+    async def create(cls, dimension: int, connection: sqlite3.Connection, bank_id: str, search_mode: str):
+        instance = cls(dimension, connection, bank_id, search_mode)
         await instance.initialize()
         return instance
 
@@ -230,7 +231,9 @@ class SQLiteVecVectorIOAdapter(VectorIO, VectorDBsProtocolPrivate):
         for row in rows:
             vector_db_data = row[0]
             vector_db = VectorDB.model_validate_json(vector_db_data)
-            index = await SQLiteVecIndex.create(vector_db.embedding_dimension, self.connection, vector_db.identifier)
+            index = await SQLiteVecIndex.create(
+                vector_db.embedding_dimension, self.connection, vector_db.identifier, vector_db.model_extra.get()
+            )
             self.cache[vector_db.identifier] = VectorDBWithIndex(vector_db, index, self.inference_api)
 
     async def shutdown(self) -> None:
@@ -247,7 +250,9 @@ class SQLiteVecVectorIOAdapter(VectorIO, VectorDBsProtocolPrivate):
             (vector_db.identifier, vector_db.model_dump_json()),
         )
         self.connection.commit()
-        index = await SQLiteVecIndex.create(vector_db.embedding_dimension, self.connection, vector_db.identifier)
+        index = await SQLiteVecIndex.create(
+            vector_db.embedding_dimension, self.connection, vector_db.identifier, vector_db.search_mode
+        )
         self.cache[vector_db.identifier] = VectorDBWithIndex(vector_db, index, self.inference_api)
 
     async def list_vector_dbs(self) -> List[VectorDB]:
