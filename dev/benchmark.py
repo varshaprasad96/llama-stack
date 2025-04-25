@@ -10,6 +10,7 @@ import re
 import string
 import uuid
 from collections import Counter
+from typing import Dict, List, Set
 
 from llama_stack_client.types import Document
 
@@ -54,6 +55,17 @@ def normalize_answer(s):
     return white_space_fix(remove_articles(remove_punc(lower(s))))
 
 
+def compute_recall_metrics(gold_titles: Set[str], retrieved_titles: List[str]) -> Dict[str, float]:
+    def hit_at_k(k):
+        return 1.0 if any(title in gold_titles for title in retrieved_titles[:k]) else 0.0
+
+    return {
+        "Recall@1": hit_at_k(1),
+        "Recall@3": hit_at_k(3),
+        "Recall@5": hit_at_k(5),
+    }
+
+
 def f1_score(prediction, ground_truth):
     pred_tokens = normalize_answer(prediction).split()
     truth_tokens = normalize_answer(ground_truth).split()
@@ -81,12 +93,19 @@ def load_hotpotqa(path, limit=50):
     qa_pairs = []
     documents = []
     for idx, item in enumerate(data[:limit]):
+        question = item["question"]
+        supporting_titles = {title for title, _ in item["supporting_facts"]}
         for title, text in item["context"]:
             doc_id = f"{idx}_{title.replace(' ', '_')}"
             text = " ".join(text).strip() if isinstance(text, list) else text.strip()
             documents.append(Document(document_id=doc_id, content=text, metadata={"title": title}))
-        qa_pairs.append((item["question"], item["answer"]))
+        qa_pairs.append((question, supporting_titles))
     return qa_pairs, documents
+
+
+def compute_recall_at_k(gold_titles: Set[str], retrieved_titles: list, k: int) -> float:
+    top_k = retrieved_titles[:k]
+    return 1.0 if any(title in gold_titles for title in top_k) else 0.0
 
 
 # ------------ Main Evaluation ------------ #
@@ -101,7 +120,7 @@ def main():
         vector_db_id=vector_db_id,
         embedding_model="all-MiniLM-L6-v2",
         # embedding_dimension=384,
-        embedding_dimension=256,
+        embedding_dimension=384,
     )
     print(f" Registered Vector DB: {vector_db_id}")
 
@@ -112,33 +131,74 @@ def main():
     )
     print(f" Inserted {len(documents)} documents into vector DB")
 
-    f1_scores, em_scores = [], []
-
-    for idx, (question, ground_truth) in enumerate(qa_pairs):
-        query_config = RAGQueryConfig(max_chunks=3, search_mode="vector").model_dump()
-
+    recalls = []
+    recall_buckets = {"Recall@1": [], "Recall@3": [], "Recall@5": []}
+    for idx, (question, supporting_titles) in enumerate(qa_pairs):
+        query_config = RAGQueryConfig(max_chunks=5, search_mode="vector").model_dump()
         result = client.tool_runtime.rag_tool.query(
             vector_db_ids=[vector_db_id],
             content=question,
             query_config=query_config,
         )
 
-        pred = result.content if hasattr(result, "content") else str(result)
-        f1 = f1_score(pred, ground_truth)
-        em = exact_match_score(pred, ground_truth)
+        print("*************************")
+        print(result)
+        print("*************************")
+        # Extract retrieved titles from metadata
+        doc_id_to_title = {doc.document_id: doc.metadata.get("title", "") for doc in documents}
 
-        f1_scores.append(f1)
-        em_scores.append(em)
+        retrieved_ids = result.metadata.get("document_ids", [])
+        retrieved_titles = [doc_id_to_title.get(doc_id, "") for doc_id in retrieved_ids]
 
-        print(f"{idx + 1:03} | F1: {f1:.2f} | EM: {em} | Q: {question} | Pred: {pred} | GT: {ground_truth}")
+        # recall = compute_recall_at_k(supporting_titles, retrieved_titles, k=1)
+        # recalls.append(recall)
+        recall_scores = compute_recall_metrics(supporting_titles, retrieved_titles)
+        for key, score in recall_scores.items():
+            recall_buckets[key].append(score)
+        print(f"Q: {question}")
+        print(f"Supporting: {sorted(supporting_titles)}")
+        print(f"Retrieved: {sorted(retrieved_titles[:5])}")
+        print()
 
-    avg_f1 = sum(f1_scores) / len(f1_scores)
-    avg_em = sum(em_scores) / len(em_scores)
+        # print(f"{idx + 1:02d} | Recall@5: {recall:.1f} | Q: {question}")
+
+    # avg_recall = sum(recalls) / len(recalls)
+    #
+    # print(f"\n======================")
+    # print(f" Average Recall@5: {avg_recall:.4f}")
+    # print(f"======================")
 
     print("\n======================")
-    print(f"Average F1: {avg_f1:.4f}")
-    print(f"Average EM: {avg_em:.4f}")
+    for key, scores in recall_buckets.items():
+        print(f" Average {key}: {sum(scores) / len(scores):.4f}")
     print("======================")
+    # f1_scores, em_scores = [], []
+    #
+    # for idx, (question, ground_truth) in enumerate(qa_pairs):
+    #     query_config = RAGQueryConfig(max_chunks=3, search_mode="vector").model_dump()
+    #
+    #     result = client.tool_runtime.rag_tool.query(
+    #         vector_db_ids=[vector_db_id],
+    #         content=question,
+    #         query_config=query_config,
+    #     )
+    #
+    #     pred = result.content if hasattr(result, "content") else str(result)
+    #     f1 = f1_score(pred, ground_truth)
+    #     em = exact_match_score(pred, ground_truth)
+    #
+    #     f1_scores.append(f1)
+    #     em_scores.append(em)
+    #
+    #     print(f"{idx + 1:03} | F1: {f1:.2f} | EM: {em} | Q: {question} | Pred: {pred} | GT: {ground_truth}")
+    #
+    # avg_f1 = sum(f1_scores) / len(f1_scores)
+    # avg_em = sum(em_scores) / len(em_scores)
+    #
+    # print("\n======================")
+    # print(f"Average F1: {avg_f1:.4f}")
+    # print(f"Average EM: {avg_em:.4f}")
+    # print("======================")
 
 
 if __name__ == "__main__":
